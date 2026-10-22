@@ -16,12 +16,17 @@
   var SEEN_KEY = '__dsh_splash_seen__'
 
   // 每个窗口只放一次：HMR 热重载 / 页面刷新不再重复播放
+  // 注意：**标记只在动画真正播完后写下**。桌面壳可能先加载一个占位页再导航到正式页，
+  // 若在脚本开头就打标记，正式页会因为「已看过」而整段不播（实测就是这样丢的）。
   try {
     if (window.__DSH_SPLASH_BOOTED__) return
     window.__DSH_SPLASH_BOOTED__ = true
     if (CFG.oncePerSession !== false && sessionStorage.getItem(SEEN_KEY) === '1') return
-    sessionStorage.setItem(SEEN_KEY, '1')
   } catch (e) {}
+
+  function markSeen() {
+    try { sessionStorage.setItem(SEEN_KEY, '1') } catch (e) {}
+  }
 
   function alive() {
     try { return !!(window.__DSH_SPLASH_META__ && window.__DSH_SPLASH_META__.enabled) } catch (e) { return true }
@@ -48,6 +53,29 @@
     el.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:2147483647;'
       + 'pointer-events:auto;background:#0b0d12;contain:strict;'
     parent.appendChild(el)
+    // position:fixed 只对「没有任何 transform/filter/contain 祖先」的元素才是相对视口。
+    // 宿主一旦在 body/html 上挂了变换，覆盖层就会被缩在某个盒子里。
+    // 这里按实测矩形做反向补偿，铺满整个视口；尺寸变化时重新贴。
+    function fit() {
+      try {
+        for (var pass = 0; pass < 3; pass++) {
+          var r = el.getBoundingClientRect()
+          var vw = window.innerWidth || document.documentElement.clientWidth
+          var vh = window.innerHeight || document.documentElement.clientHeight
+          el.style.width = vw + 'px'
+          el.style.height = vh + 'px'
+          var dx = -r.left, dy = -r.top
+          el.style.left = (parseFloat(el.style.left) || 0) + dx + 'px'
+          el.style.top = (parseFloat(el.style.top) || 0) + dy + 'px'
+          if (Math.abs(r.width - vw) < 1.5 && Math.abs(r.height - vh) < 1.5) break
+        }
+      } catch (e) {}
+    }
+    fit()
+    try { window.addEventListener('resize', fit) } catch (e) {}
+    setTimeout(fit, 80)
+    setTimeout(fit, 320)
+    setTimeout(fit, 900)
     return el
   }
 
@@ -72,7 +100,8 @@
   var statusEl = null
   try { statusEl = shadow.querySelector('.status') } catch (e) { statusEl = null }
 
-  var WRITE_START = 1150, DUR = 380, STAGGER = 295, T_LOGO = 5680, T_FADE = T_LOGO + 1150
+  // 节奏：窗口一出现就几乎立刻起笔（不再留 1 秒多的空场）
+  var WRITE_START = 320, DUR = 360, STAGGER = 285, T_LOGO = 4900, T_FADE = T_LOGO + 1250
   var started = false, finished = false
 
   function setVersion() {
@@ -134,6 +163,7 @@
   function fadeOut(after) {
     if (finished) return
     finished = true
+    markSeen()
     try { if (host) host.style.transition = 'opacity .42s ease'; host.style.opacity = '0' } catch (e) {}
     setTimeout(function () { teardown(); if (typeof after === 'function') after() }, 460)
   }
@@ -197,42 +227,36 @@
     requestAnimationFrame(frame)
   }
 
-  // ── 起跑时机：窗口真正可见（获得焦点）时才开始，避免动画在隐藏窗口里白播 ──
+  // ── 起跑时机 ──
+  // 越早越好：脚本一落地就排一帧，宿主把窗口显示出来的那一刻 rAF 就会回调 → 立刻起笔。
+  // （窗口隐藏时 Chromium 不回调 rAF，所以「等到 rAF」天然等价于「等到真的可见」。）
   var kicked = false
-  function kick(reason) {
+  function kick() {
     if (kicked || finished) return
     kicked = true
-    // 让出一帧，确保覆盖层已经完成首次绘制
-    setTimeout(function () { if (alive()) animate(); else fadeOut() }, 90)
+    if (alive()) animate(); else fadeOut()
   }
 
-  if (CFG.clickToSkip !== false) {
-    host.addEventListener('mousedown', function () { if (started) fadeOut(); else kick('click') }, true)
-  }
+  // 点击行为：默认**不跳过**——加载期间点界面不该让主页面直接跳出来。
+  // 只有显式配置 clickToSkip=true 时，点击才收掉画面。
+  host.addEventListener('mousedown', function (e) {
+    if (CFG.clickToSkip === true) { if (started) fadeOut(); else kick(); return }
+    e.preventDefault(); e.stopPropagation()
+  }, true)
+  host.addEventListener('click', function (e) {
+    if (CFG.clickToSkip === true) return
+    e.preventDefault(); e.stopPropagation()
+  }, true)
+  host.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation() }, true)
 
-  window.addEventListener('focus', function () { kick('focus') }, { once: true })
+  requestAnimationFrame(kick)
+  try {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') kick()
+    })
+  } catch (e) {}
+  setTimeout(kick, 1500)   // 兜底：rAF 被节流时也不至于一直不开始
 
-  // 兜底：等 React 挂载出内容（窗口即将显示），或硬超时
-  function waitRoot() {
-    var root = document.getElementById('root')
-    if (!root) return false
-    if (root.childElementCount > 0) return true
-    if (window.MutationObserver) {
-      var mo = new MutationObserver(function () {
-        if (root.childElementCount > 0) { mo.disconnect(); setTimeout(function () { kick('mount') }, 420) }
-      })
-      try { mo.observe(root, { childList: true, subtree: false }) } catch (e) {}
-    }
-    return false
-  }
-  if (!waitRoot()) {
-    var tries = 0
-    var iv = setInterval(function () {
-      tries++
-      if (waitRoot() || tries > 40) clearInterval(iv)
-    }, 100)
-  }
-  setTimeout(function () { kick('timeout') }, 4000)
   // 硬保险：20 秒后无论动画演到哪都收掉，绝不挡住界面
   setTimeout(function () { fadeOut() }, 20000)
 })();

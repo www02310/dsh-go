@@ -1,6 +1,6 @@
 {
   "name": "dsh-splash",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "DeepSeek Harness 启动画面：亮白跑马灯 → 一笔写出 DeepSeek Harness。运行时注入，不改宿主文件，随升级存活 · Launch splash for DSH: marquee lights up, then the wordmark is written stroke by stroke.",
   "type": "module",
   "main": "lib/index.js",
