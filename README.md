@@ -1,58 +1,119 @@
-# DeepSeek Harness 启动画面
+# dsh-splash
 
-给 DSH 桌面端加一个启动画面：启动时先出现约 6 秒的动画，主窗口就绪后自动关闭。
+DeepSeek Harness 的启动画面：**亮白跑马灯点亮 → 一笔写出「DeepSeek Harness」→ 下划线扫过 → 鱼形 logo 淡入 → 进度条与版本号**，全程约 7 秒，播完自行淡出。
 
-![预览](preview.png)
+以 **DSH 插件**形态实现：不改宿主任何文件，随 DSH 升级存活，卸载即干净。
 
-**效果顺序**：深色底 → 一排亮白跑马灯（点阵依次点亮 + 光束扫过）→ **亮白一笔写出 DeepSeek Harness**（手写体逐字母落笔，带辉光笔尖，写完后填色）→ 下划线扫过 → 鱼形 logo 淡入 → 加载条 + 版本号。
+> 想要连「进程启动到主窗口出现」那段空窗期也覆盖的版本？那是改 `app.asar` 的原生补丁版，见 [`native/`](native/README.md)（两者二选一，插件默认会检测到它并让位）。
 
-![书写过程](preview-writing.png)
+![启动画面](assets/screenshot-1.png)
+![书写中](assets/screenshot-2.png)
 
 ## 安装
 
-1. **完全退出 DSH**：右键托盘图标 →「退出」。注意关窗口只是最小化，不算退出。
-2. 双击 **安装.cmd**。
-3. 看到「完成」后启动 DSH 即可（脚本会问你要不要现在启动）。
-4. 想撤回：退出 DSH → 双击 **卸载.cmd**。
+```bash
+# 从 GitHub 直接安装（推荐）
+dsh plugin --profile desktop add https://github.com/www02310/dsh-go
 
-安装过程会自动：
+# 从本地目录安装（开发调试）
+dsh plugin --profile desktop add link:D:\path\to\dsh-go
+```
 
-- 从注册表 / 常见路径定位 DSH 安装目录（找不到会提示你手动填）；
-- 使用 DSH 自带的 node 运行时（不需要你装 Node.js）；
-- 备份原始 `resources\app.asar` 为 `app.asar.pre-splash.bak`；
-- 重建 asar 并逐字节校验其余 1.6 万个文件后再落盘（失败不做任何修改）。
+装完重启 DeepSeek Harness，下次启动就会看到开场动画。
 
-## 环境要求
+> 桌面客户端的 `desktop` profile 由 Electron 应用独占管理，命令行 `dsh plugin` 会拒绝改它。
+> 这种情况按下面「手动挂载」做，一条即可。
 
-- Windows 10 / 11（x64）
-- DeepSeek Harness 桌面版，**已在 0.2.1-rc.2（Electron 44.7.0）实测通过**
-- 不需要管理员权限；但如果 DSH 装在 `C:\Program Files` 下，需要右键 安装.cmd →「以管理员身份运行」
+<details>
+<summary>手动挂载（desktop profile）</summary>
 
-## 兼容性与升级
+1. 把本仓库放到任意目录（例如 `D:\dsh-go`），在 `C:\Users\<你>\.dsh\profiles\desktop\` 下建软链接：
 
-- 补丁改的是 `resources\app.asar` 里的 `lib/main.js`。不同 DSH 版本代码可能不同：插入点对不上时脚本会报「插入点不存在」并**什么都不改**，DSH 不受影响。
-- **DSH 自动升级会替换 app.asar，启动画面随之消失**——升级后重新运行一次 安装.cmd 即可。
-- 与其它插件（如 dsh-purge）不冲突：补丁只加一段启动画面逻辑，找不到画面文件就整体跳过。
+   ```powershell
+   New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-splash" -Target "D:\dsh-go"
+   ```
+
+2. 编辑 `~/.dsh/profiles/desktop/package.json`：
+
+   ```jsonc
+   {
+     "dependencies": { "dsh-splash": "link:D:/dsh-go" },
+     "dsh": { "profile": { "bundles": [ /* …原来的… */, "dsh-splash" ] } }
+   }
+   ```
+
+3. 重启 DSH。
+</details>
+
+## 配置
+
+设置文件：`~/.dsh/splash/config.json`（首次启动后自动生成）
+
+```jsonc
+{
+  "enabled": true,        // 总开关
+  "oncePerSession": true, // 每个窗口只播一次（热重载/刷新不重复）
+  "clickToSkip": true,    // 点击画面立即淡出
+  "skipIfNative": true    // 检测到「原生补丁版」时自动让位，避免两层叠加
+}
+```
+
+**图形面板**：DSH 运行后打开 `http://127.0.0.1:<端口>/dsh-splash/panel`（端口在 DSH 日志/进程里，桌面端是随机端口）。
+面板里可以开关各项、预览动画、看当前状态。
+
+也可以走路由：
+
+| 路由 | 方法 | 说明 |
+| --- | --- | --- |
+| `/dsh-splash/status` | GET | 插件版本、宿主版本、配置、原生补丁检测结果 |
+| `/dsh-splash/config` | POST | 改配置，body 为 `{"enabled":false}` 这样的补丁对象 |
+| `/dsh-splash/panel` | GET | 图形面板 |
+| `/dsh-splash/preview` | GET | 全屏预览动画（不装插件也能看效果） |
+
+> 注入表在宿主启动时收集一次，**改完配置要重启 DSH 才生效**。写接口只接受本机（回环）请求。
 
 ## 卸载
 
-退出 DSH → 双击 卸载.cmd，从备份还原。想彻底清理可再删除 `%USERPROFILE%\.dsh\splash` 文件夹。
+```bash
+dsh plugin --profile desktop remove dsh-splash
+```
 
-## 常见问题
+手动挂载的，删掉软链接与 `package.json` 里那两处即可。插件不写宿主文件、不驻留进程，删完即彻底消失。
+想连配置一起清掉，再删 `~/.dsh/splash/`。
 
-| 现象 | 处理 |
-|---|---|
-| 弹 SmartScreen / 杀软拦截 | 脚本未签名，属正常。右键文件「属性」勾选「解除锁定」，或在杀软里给本文件夹加信任 |
-| 提示「检测到 DSH 正在运行」 | 到托盘完全退出 DSH 再试 |
-| 提示「没有写入权限」 | 右键 安装.cmd →「以管理员身份运行」 |
-| 找不到安装目录 | 安装时会提示你粘贴路径（目录里应有 `DeepSeek Harness.exe`） |
+## 和「原生补丁版」的区别
 
-## 文件说明
+| | 插件版（本仓库根目录） | 原生补丁版（`native/` 目录，v2.0 发布物） |
+| --- | --- | --- |
+| 实现 | `webServer` 的 `index-inject` 注入覆盖层 | 改 Electron 主进程 `app.asar`，开独立启动窗 |
+| 覆盖范围 | 主窗口内容区（窗口一显示就是动画） | 进程启动到主窗口就绪之间的完整空窗期 |
+| DSH 升级 | **不受影响**，自动存活 | 升级替换 `app.asar` 后失效，需重装 |
+| 安装 | 一条 `dsh plugin add` | 关闭 DSH → 跑安装脚本 |
+| 卸载 | 删插件即可 | 从备份还原 `app.asar` |
+| 风险 | 零文件改动 | 改动宿主二进制（有逐字节自校验与备份） |
 
-| 文件 | 用途 |
-|---|---|
-| `安装.cmd` / `install.ps1` | 一键安装（自动探测目录、权限自检、安装后可顺手启动 DSH） |
-| `卸载.cmd` / `uninstall.ps1` | 一键还原 |
-| `apply-splash.mjs` | 补丁核心（重建 asar + 自验证 + 备份/还原），也可手动：`node apply-splash.mjs [--dry-run] [--restore] [安装目录]` |
-| `splash/splash.html` | 启动画面本身（自包含）。想改画面可编辑后复制到 `%USERPROFILE%\.dsh\splash\splash.html` |
-| `splash/logo.svg` | 画面里的鱼形 logo |
+两者默认不会同时出画面：插件检测到 `app.asar` 里有原生补丁时会自动让位（`skipIfNative`）。
+
+## 实现要点
+
+- 注入三件事：一条 `global` 行（`__DSH_SPLASH_META__`：版本与配置）+ 一条内联 `script` 行（覆盖层本体）。
+  用**内联 script 而不是 script-src**：内联行不会加载失败，也就不可能把 `__DSH_BOOT_READY__` 卡死（那是 script-src 失败时的宿主级故障）。
+- 覆盖层挂在 **closed shadow DOM** 里，宿主样式进不来、覆盖层样式也污染不到宿主。
+- 动画在「窗口真正可见」时才起跑：优先等 `focus` 事件，其次等 React 挂载出 `#root` 内容，最后 4 秒兜底；
+  20 秒硬保险无论如何都收掉，绝不挡界面。
+- `assets/splash-overlay.js` 是从 `assets/splash.html` 生成的：改画面只改 html，然后
+
+  ```bash
+  node tools/build-overlay.mjs
+  ```
+
+## 兼容性
+
+- 实测于 **DSH 0.2.1-rc.2（Electron 44.7.0）**。
+- 依赖宿主提供 `webserver/index-inject` 注入表（并支持 `global` / `script` 行）。
+  宿主不提供时插件只是静默不生效，不会影响 DSH 启动。
+- `tools/harness.html` 是不依赖 DSH 的本地预览页：起个静态服务打开即可调试动画。
+
+## License
+
+MIT

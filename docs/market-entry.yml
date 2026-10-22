@@ -1,0 +1,7 @@
+url: https://github.com/www02310/dsh-go
+name: www02310/dsh-go
+category: ui
+description:
+  en: Launch splash screen for DSH — a marquee lights up, then the DeepSeek Harness wordmark is written stroke by stroke; injected at runtime, so it never touches host files.
+  zh: DSH 启动画面：亮白跑马灯点亮后一笔写出 DeepSeek Harness；运行时注入，不改宿主任何文件，随升级存活。
+tarball: https://github.com/www02310/dsh-go/releases/latest/download/dsh-splash-1.0.0.tgz
