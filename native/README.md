@@ -8,9 +8,11 @@
 
 启动窗**跟 DSH 主窗口一样大、一样位置**：宿主窗口一建出来就 `setBounds` 对齐，窗口移动/缩放也实时跟随；下次启动直接复用上次的位置尺寸（`%USERPROFILE%\.dsh\splash\window.json`），不会先大后小地跳一下。
 
+**所有几何调整都在显示之前做完**：`ready-to-show` 里做最后一次对齐、然后才 `show()`；窗口一旦可见就不再 `setBounds`。这是为了躲开一个坑——可见状态下改窗口几何，DWM 会短暂留着上一帧的画面，看起来就是「同一段动画有两份、一大一小叠着」。
+
 **整段动画一定演完**：主窗口就算 3 秒就绪也不提前撤，启动窗至少展示 6.4 秒（写完整段字 + logo 淡入），收尾淡出 120ms 再销毁，绝不硬切。
 
-启动时序会写进 `%USERPROFILE%\.dsh\splash\boot.log`（opened / painted / close requested / closed），出问题先看这个。
+启动时序会写进 `%USERPROFILE%\.dsh\splash\boot.log`（opened / shown / painted / close requested / closed），出问题先看这个。
 
 ![书写过程](preview-writing.png)
 
