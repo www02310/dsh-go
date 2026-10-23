@@ -6,7 +6,11 @@
 
 **效果顺序**：深色底 → 一排亮白跑马灯（点阵依次点亮 + 光束扫过）→ **亮白一笔写出 DeepSeek Harness**（手写体逐字母落笔，带辉光笔尖，写完后填色）→ 下划线扫过 → 鱼形 logo 淡入 → 加载条 + 版本号。
 
-启动窗**跟 DSH 主窗口一样大、一样位置**：宿主窗口一建出来就 `setBounds` 对齐，窗口移动/缩放也实时跟随；下次启动直接复用上次的位置尺寸（`%USERPROFILE%\.dsh\splash\window.json`），不会先大后小地跳一下。收尾用全局窗口事件：只要有一个够大的窗口真正显示出来就关掉它，绝不会留在已经就绪的主界面上。
+启动窗**跟 DSH 主窗口一样大、一样位置**：宿主窗口一建出来就 `setBounds` 对齐，窗口移动/缩放也实时跟随；下次启动直接复用上次的位置尺寸（`%USERPROFILE%\.dsh\splash\window.json`），不会先大后小地跳一下。
+
+**整段动画一定演完**：主窗口就算 3 秒就绪也不提前撤，启动窗至少展示 6.4 秒（写完整段字 + logo 淡入），收尾淡出 120ms 再销毁，绝不硬切。
+
+启动时序会写进 `%USERPROFILE%\.dsh\splash\boot.log`（opened / painted / close requested / closed），出问题先看这个。
 
 ![书写过程](preview-writing.png)
 
