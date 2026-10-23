@@ -106,7 +106,7 @@ const REGION = [
 	"let dshSplashShownAt = 0;",
 	"let dshSplashFailsafe;",
 	"let dshSplashTarget;",
-	"const DSH_SPLASH_MIN_SHOW = 7200;",
+	"const DSH_SPLASH_MIN_SHOW = 6400;",
 	"// 启动时序日志：DSH_HOME/splash/boot.log，排查「动画被切」时看这个",
 	"function dshSplashLog(msg) {",
 	"\ttry {",
